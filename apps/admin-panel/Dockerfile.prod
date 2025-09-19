@@ -1,0 +1,32 @@
+FROM node:20-slim AS builder
+
+WORKDIR /usr/src/app
+
+# Instala dependencias
+COPY package.json yarn.lock tsconfig.base.json ./
+COPY apps/admin-panel/package.json apps/admin-panel/
+RUN yarn install --frozen-lockfile
+
+# construye los paquetes comunes
+COPY packages packages
+RUN yarn workspace @common/logging run build
+RUN yarn workspace @common/types run build
+
+# Construye la app Next.js
+COPY . .
+WORKDIR /usr/src/app/apps/admin-panel
+RUN yarn build
+
+# ---------------------------------------
+FROM node:20-slim AS runner
+
+WORKDIR /usr/src/app/apps/admin-panel
+
+# Copia build y node_modules
+COPY --from=builder /usr/src/app/apps/admin-panel/.next ./.next
+COPY --from=builder /usr/src/app/apps/admin-panel/node_modules ./node_modules
+COPY --from=builder /usr/src/app/apps/admin-panel/public ./public
+
+EXPOSE 3000
+# Next.js por defecto expone en 3000
+CMD ["yarn", "start"]

@@ -1,0 +1,18 @@
+{
+  "name": "@common/logging",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/winston": "^2.4.4",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.2"
+  }
+}

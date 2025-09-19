@@ -1,0 +1,11 @@
+FROM node:20-alpine
+
+WORKDIR /usr/src/app
+COPY package.json yarn.lock tsconfig.base.json ./
+COPY apps/admin-panel/package.json apps/admin-panel/
+RUN yarn install --frozen-lockfile
+
+COPY . .
+WORKDIR /usr/src/app/apps/admin-panel
+
+CMD ["yarn", "dev"]
