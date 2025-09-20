@@ -1,3 +1,5 @@
+# .github/workflows/ci.yml
+
 name: CI/CD Pipeline
 
 on:
@@ -12,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
   packages: write
   security-events: write
 
@@ -54,8 +57,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        workspace: ["backend", "admin-panel", "logging", "types"]
-
+        workspace:
+          - backend
+          - admin-panel
+          - logging
+          - types
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -65,7 +71,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Install root deps
+      - name: Install root dependencies
         run: yarn install --frozen-lockfile
 
       - name: Lint ${{ matrix.workspace }}
@@ -87,11 +93,10 @@ jobs:
           POSTGRES_USER: ${{ env.POSTGRES_USER }}
           POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
         options: >-
-          --health-cmd="pg_isready -U postgres -d projectnewtest_db"
+          --health-cmd="pg_isready -U ${{ env.POSTGRES_USER }} -d ${{ env.POSTGRES_DB }}"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
@@ -131,7 +136,7 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Dependency review
+      - name: Dependency Review
         uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: moderate
@@ -141,38 +146,46 @@ jobs:
         with:
           languages: javascript-typescript
 
-      - name: Perform CodeQL analysis
+      - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
 
-      - name: Run Semgrep SAST
-        uses: semgrep/semgrep-action@v1
+      - name: Setup Python for Semgrep
+        uses: actions/setup-python@v4
         with:
-          config: >-
-            p/security-audit
-            p/secrets
-            p/typescript
-            p/nodejs
-          generateSarif: "1"
+          python-version: '3.x'
 
-      - name: Upload Semgrep results to GitHub
+      - name: Install Semgrep CLI
+        run: pip install semgrep
+
+      - name: Run Semgrep SAST
+        run: |
+          semgrep \
+            --config p/security-audit \
+            --config p/secrets \
+            --config p/typescript \
+            --config p/nodejs \
+            --sarif \
+            --output semgrep-results.sarif .
+
+      - name: Upload Semgrep SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: semgrep.sarif
+          sarif_file: semgrep-results.sarif
 
-      - name: Run Trivy vulnerability scanner
+      - name: Run Trivy Vulnerability Scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
 
-      - name: Upload Trivy results to GitHub
+      - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
         if: always()
         with:
-          sarif_file: 'trivy-results.sarif'
+          sarif_file: trivy-results.sarif
 
       - name: Generate SBOM
         uses: anchore/sbom-action@v0
@@ -181,7 +194,7 @@ jobs:
           format: spdx-json
           output-file: sbom.spdx.json
 
-      - name: Upload SBOM as artifact
+      - name: Upload SBOM Artifact
         uses: actions/upload-artifact@v4
         with:
           name: sbom-${{ github.sha }}
@@ -189,7 +202,9 @@ jobs:
 
   docker:
     if: github.ref == 'refs/heads/main'
-    needs: [build, test]
+    needs:
+      - build
+      - test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source
@@ -202,7 +217,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build & push backend image
+      - name: Build & Push Backend Image
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -213,7 +228,7 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/project-new-clean-backend:latest
             ghcr.io/${{ github.repository_owner }}/project-new-clean-backend:${{ github.sha }}
 
-      - name: Build & push admin-panel image
+      - name: Build & Push Admin-Panel Image
         uses: docker/build-push-action@v4
         with:
           context: .
@@ -223,3 +238,4 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/project-new-clean-admin-panel:latest
             ghcr.io/${{ github.repository_owner }}/project-new-clean-admin-panel:${{ github.sha }}
+```
